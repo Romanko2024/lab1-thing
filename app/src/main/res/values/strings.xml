@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">lab1-thing</string>
+    <string name="app_name">Lab1 Thing</string>
+    <string name="greeting_name">Android</string>
 </resources>
