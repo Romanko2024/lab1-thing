@@ -4,9 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.navigation3.runtime.NavKey
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.Serializable
 
+@Serializable
 sealed interface HomeScreen : NavKey {
+    @Serializable
     data object Main : HomeScreen
+
+    @Serializable
     data object Details : HomeScreen
 }
 
