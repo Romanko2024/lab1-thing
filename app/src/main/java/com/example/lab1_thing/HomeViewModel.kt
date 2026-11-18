@@ -5,6 +5,9 @@ import androidx.navigation3.runtime.NavKey
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
+import com.example.lab1_thing.model.MyListable
+import com.example.lab1_thing.repository.AppRepository
+import com.example.lab1_thing.repository.AppRepositoryImpl
 
 @Serializable
 sealed interface HomeScreen : NavKey {
@@ -17,6 +20,9 @@ sealed interface HomeScreen : NavKey {
 
 class HomeViewModel : ViewModel() {
 
+    private val appRepository: AppRepository = AppRepositoryImpl()
+    val catalogItems: StateFlow<List<MyListable>>
+        field = MutableStateFlow(appRepository.getAllData())
     val labelText: StateFlow<String>
         field = MutableStateFlow("Початковий текст на Головній")
 

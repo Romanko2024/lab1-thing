@@ -41,6 +41,17 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.example.lab1_thing.ui.theme.Lab1thingTheme
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import com.example.lab1_thing.model.Artist
+import com.example.lab1_thing.model.HorizontalList
+import com.example.lab1_thing.model.MyListable
+import com.example.lab1_thing.model.Track
+import com.example.lab1_thing.ui.components.ArtistCard
+import com.example.lab1_thing.ui.components.ArtistHorizontalCard
+import com.example.lab1_thing.ui.components.TrackCard
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -101,6 +112,7 @@ fun HomeNavDisplay(
     val labelText by viewModel.labelText.collectAsState()
 //  val backStack = rememberNavBackStack(HomeScreen.Main)
     val backStack by viewModel.homeBackStack.collectAsState()
+    val catalogItems by viewModel.catalogItems.collectAsState()
 
     NavDisplay(
         backStack = backStack,
@@ -113,6 +125,7 @@ fun HomeNavDisplay(
                     labelText = labelText,
                     onUpdateText = viewModel::updateText,
                     name = name,
+                    items = catalogItems,
                     onNavigateToDetails = {
 //                      backStack.add(HomeScreen.Details)
                         viewModel.navigateTo(HomeScreen.Details)
@@ -152,26 +165,67 @@ fun HomeMainContent(
     labelText: String,
     onUpdateText: (String) -> Unit,
     name: String,
+    items: List<MyListable>,
     onNavigateToDetails: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(text = "Hello, $name", style = MaterialTheme.typography.bodyMedium)
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(Modifier.height(8.dp))
         Text(text = labelText, style = MaterialTheme.typography.headlineMedium)
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.height(16.dp))
         Button(
             onClick = { onUpdateText("Текст змінено на Головній!") },
             modifier = Modifier.fillMaxWidth(0.8f).height(64.dp)
+        ) { Text("Змінити текст") }
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().weight(1f),
+            contentPadding = PaddingValues(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text("Змінити текст")
+            items(
+                items = items,
+                key = { item ->
+                    "${item.id}_${when (item) {
+                        is Artist -> item.name
+                        is Track -> item.title
+                        is HorizontalList -> "h_${item.id}"
+                    }}"
+                }
+            ) { item ->
+                when (item) {
+                    is Artist -> ArtistCard(artist = item)
+                    is Track -> TrackCard(track = item)
+                    is HorizontalList -> HorizontalArtistsRow(horizontalList = item)
+                }
+            }
         }
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = onNavigateToDetails, modifier = Modifier.fillMaxWidth(0.6f)) {
-            Text("Перейти далі")
+
+        Button(
+            onClick = onNavigateToDetails,
+            modifier = Modifier.fillMaxWidth(0.6f).padding(vertical = 12.dp)
+        ) { Text("Перейти далі") }
+    }
+}
+
+@Composable
+private fun HorizontalArtistsRow(
+    horizontalList: HorizontalList,
+    modifier: Modifier = Modifier,
+) {
+    LazyRow(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(
+            items = horizontalList.artistList,
+            key = { artist -> "h_${artist.id}_${artist.name}" }
+        ) { artist ->
+            ArtistHorizontalCard(artist = artist)
         }
     }
 }
