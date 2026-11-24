@@ -1,12 +1,18 @@
 package com.example.lab1_thing.repository
 
+import com.example.lab1_thing.dao.AppDao
 import com.example.lab1_thing.model.Artist
 import com.example.lab1_thing.model.HorizontalList
 import com.example.lab1_thing.model.MyListable
 import com.example.lab1_thing.model.Track
+import com.example.lab1_thing.util.toDomain
+import com.example.lab1_thing.util.toEntity
 
-class AppRepositoryImpl : AppRepository {
+class AppRepositoryImpl(
+    private val appDao: AppDao
+) : AppRepository {
 
+    // ── Локальні тестові дані ──
     private val myArtistList: List<Artist> = listOf(
         Artist("Lorem Ipsum", "Iceland", id = 1),
         Artist("Dolor sit amet", "Japan", id = 2),
@@ -31,5 +37,50 @@ class AppRepositoryImpl : AppRepository {
         Track("Deserunt", 255, myArtistList[3], id = 7),
     )
 
-    override fun getAllData(): List<MyListable> = myAppList
+    // ── DB ──
+    override suspend fun addArtistsToDb(artists: List<Artist>): List<Long> {
+        return appDao.insertAllArtists(artists.map { it.toEntity() })
+    }
+
+    override suspend fun addTracksToDb(tracks: List<Track>) {
+        appDao.insertAllTracks(tracks.map { it.toEntity() })
+    }
+
+    override suspend fun getArtistsFromDb(): List<Artist> {
+        return appDao.getArtists().map { it.toDomain() }
+    }
+
+    override suspend fun getTracksFromDb(): List<Track> {
+        return appDao.getTracks().map { it.toDomain() }
+    }
+
+    override suspend fun getAllDataFromDb(): List<MyListable> {
+        return getArtistsFromDb().plus(getTracksFromDb())
+    }
+
+    override suspend fun updateArtistInDb(artist: Artist) {
+        appDao.updateArtist(artist.toEntity())
+    }
+
+    override suspend fun updateTrackInDb(track: Track) {
+        appDao.updateTrack(track.toEntity())
+    }
+
+    override suspend fun deleteArtist(artist: Artist) {
+        appDao.delArtist(artist.toEntity())
+    }
+
+    override suspend fun deleteTrack(track: Track) {
+        appDao.delTrack(track.toEntity())
+    }
+
+    override suspend fun clearAllData() {
+        appDao.delAllTracks()
+        appDao.delAllArtists()
+    }
+
+    // ── Local ──
+    override fun getLocalArtists(): List<Artist> = myArtistList
+    override fun getLocalTracks(): List<Track> = myAppList.filterIsInstance<Track>()
+    override fun getAllLocalData(): List<MyListable> = myAppList
 }
