@@ -6,12 +6,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -23,9 +27,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,25 +39,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation3.runtime.entryProvider
-import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
-import com.example.lab1_thing.ui.theme.Lab1thingTheme
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import com.example.lab1_thing.model.Artist
 import com.example.lab1_thing.model.HorizontalList
 import com.example.lab1_thing.model.MyListable
 import com.example.lab1_thing.model.Track
+import com.example.lab1_thing.repository.AppRepository
 import com.example.lab1_thing.ui.components.ArtistCard
+import com.example.lab1_thing.ui.components.ArtistDialog
 import com.example.lab1_thing.ui.components.ArtistHorizontalCard
 import com.example.lab1_thing.ui.components.TrackCard
+import com.example.lab1_thing.ui.components.TrackDialog
+import com.example.lab1_thing.ui.theme.Lab1thingTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,16 +63,22 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             Lab1thingTheme {
-                Lab1thingApp()
+                Lab1thingApp((application as Lab1ThingApp).appRepository)
             }
         }
     }
 }
 
-@PreviewScreenSizes
 @Composable
-fun Lab1thingApp() {
+fun Lab1thingApp(appRepository: AppRepository) {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
+
+    // Створюємо HomeViewModel через фабрику, передаючи репозиторій
+    val homeViewModel: HomeViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer { HomeViewModel(appRepository) }
+        }
+    )
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -87,7 +97,8 @@ fun Lab1thingApp() {
             when (currentDestination) {
                 AppDestinations.HOME -> HomeNavDisplay(
                     modifier = Modifier.padding(innerPadding),
-                    name = name
+                    name = name,
+                    viewModel = homeViewModel
                 )
                 AppDestinations.SETTINGS -> SettingsRoute(
                     modifier = Modifier.padding(innerPadding),
@@ -107,17 +118,20 @@ enum class AppDestinations(val label: String, val icon: Int) {
 fun HomeNavDisplay(
     modifier: Modifier = Modifier,
     name: String,
-    viewModel: HomeViewModel = viewModel()
+    viewModel: HomeViewModel
 ) {
     val labelText by viewModel.labelText.collectAsState()
-//  val backStack = rememberNavBackStack(HomeScreen.Main)
     val backStack by viewModel.homeBackStack.collectAsState()
     val catalogItems by viewModel.catalogItems.collectAsState()
+
+    // Завантажуємо дані з БД при першому вході на екран
+    LaunchedEffect(Unit) {
+        viewModel.loadAllDataFromDb()
+    }
 
     NavDisplay(
         backStack = backStack,
         modifier = modifier.fillMaxSize(),
-//      onBack = { backStack.removeLastOrNull() },
         onBack = { viewModel.navigateBack() },
         entryProvider = entryProvider {
             entry<HomeScreen.Main> {
@@ -126,20 +140,21 @@ fun HomeNavDisplay(
                     onUpdateText = viewModel::updateText,
                     name = name,
                     items = catalogItems,
-                    onNavigateToDetails = {
-//                      backStack.add(HomeScreen.Details)
-                        viewModel.navigateTo(HomeScreen.Details)
-                    }
+                    onNavigateToDetails = { viewModel.navigateTo(HomeScreen.Details) },
+                    // CRUD колбеки
+                    onAddArtist = viewModel::addArtist,
+                    onAddTrack = viewModel::addTrack,
+                    onEditArtist = viewModel::updateArtist,
+                    onEditTrack = viewModel::updateTrack,
+                    onDeleteArtist = viewModel::deleteArtist,
+                    onDeleteTrack = viewModel::deleteTrack,
+                    onLoadLocalData = viewModel::loadAllLocalDataToDb,
+                    onClearDb = viewModel::clearDb
                 )
             }
 
             entry<HomeScreen.Details> {
-                HomeDetailsContent(
-                    onBack = {
-//                      backStack.removeLastOrNull()
-                        viewModel.navigateBack()
-                    }
-                )
+                HomeDetailsContent(onBack = { viewModel.navigateBack() })
             }
         }
     )
@@ -166,8 +181,22 @@ fun HomeMainContent(
     onUpdateText: (String) -> Unit,
     name: String,
     items: List<MyListable>,
-    onNavigateToDetails: () -> Unit
+    onNavigateToDetails: () -> Unit,
+    onAddArtist: (String, String) -> Unit,
+    onAddTrack: (String, Int, Artist?) -> Unit,
+    onEditArtist: (Artist) -> Unit,
+    onEditTrack: (Track) -> Unit,
+    onDeleteArtist: (Artist) -> Unit,
+    onDeleteTrack: (Track) -> Unit,
+    onLoadLocalData: () -> Unit,
+    onClearDb: () -> Unit
 ) {
+    // Стани для діалогів
+    var showAddArtistDialog by remember { mutableStateOf(false) }
+    var showAddTrackDialog by remember { mutableStateOf(false) }
+    var artistToEdit by remember { mutableStateOf<Artist?>(null) }
+    var trackToEdit by remember { mutableStateOf<Track?>(null) }
+
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -176,10 +205,31 @@ fun HomeMainContent(
         Spacer(Modifier.height(8.dp))
         Text(text = labelText, style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(16.dp))
-        Button(
-            onClick = { onUpdateText("Текст змінено на Головній!") },
-            modifier = Modifier.fillMaxWidth(0.8f).height(64.dp)
-        ) { Text("Змінити текст") }
+
+        // Кнопки керування БД
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+            Button(
+                onClick = { showAddArtistDialog = true },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("+ Додати артиста") }
+            Spacer(Modifier.height(4.dp))
+            Button(
+                onClick = { showAddTrackDialog = true },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("+ Додати трек") }
+            Spacer(Modifier.height(4.dp))
+            Button(
+                onClick = onLoadLocalData,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Завантажити тестові дані в БД") }
+            Spacer(Modifier.height(4.dp))
+            Button(
+                onClick = onClearDb,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Очистити БД") }
+        }
+
+        Spacer(Modifier.height(8.dp))
 
         LazyColumn(
             modifier = Modifier.fillMaxSize().weight(1f),
@@ -197,8 +247,16 @@ fun HomeMainContent(
                 }
             ) { item ->
                 when (item) {
-                    is Artist -> ArtistCard(artist = item)
-                    is Track -> TrackCard(track = item)
+                    is Artist -> ArtistCard(
+                        artist = item,
+                        onEditClick = { artistToEdit = item },
+                        onDeleteClick = { onDeleteArtist(item) }
+                    )
+                    is Track -> TrackCard(
+                        track = item,
+                        onEditClick = { trackToEdit = item },
+                        onDeleteClick = { onDeleteTrack(item) }
+                    )
                     is HorizontalList -> HorizontalArtistsRow(horizontalList = item)
                 }
             }
@@ -208,6 +266,51 @@ fun HomeMainContent(
             onClick = onNavigateToDetails,
             modifier = Modifier.fillMaxWidth(0.6f).padding(vertical = 12.dp)
         ) { Text("Перейти далі") }
+    }
+
+    // ── Діалоги ──
+    if (showAddArtistDialog) {
+        ArtistDialog(
+            onDismiss = { showAddArtistDialog = false },
+            onSave = { name, country ->
+                onAddArtist(name, country)
+                showAddArtistDialog = false
+            }
+        )
+    }
+
+    if (showAddTrackDialog) {
+        TrackDialog(
+            artists = items.filterIsInstance<Artist>(),
+            onDismiss = { showAddTrackDialog = false },
+            onSave = { title, duration, artist ->
+                onAddTrack(title, duration, artist)
+                showAddTrackDialog = false
+            }
+        )
+    }
+
+    artistToEdit?.let { artist ->
+        ArtistDialog(
+            initialArtist = artist,
+            onDismiss = { artistToEdit = null },
+            onSave = { name, country ->
+                onEditArtist(artist.copy(name = name, country = country))
+                artistToEdit = null
+            }
+        )
+    }
+
+    trackToEdit?.let { track ->
+        TrackDialog(
+            initialTrack = track,
+            artists = items.filterIsInstance<Artist>(),
+            onDismiss = { trackToEdit = null },
+            onSave = { title, duration, artist ->
+                onEditTrack(track.copy(title = title, durationSec = duration, artist = artist))
+                trackToEdit = null
+            }
+        )
     }
 }
 
@@ -237,19 +340,10 @@ fun HomeDetailsContent(onBack: () -> Unit) {
         modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        text = "Деталі",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
+                title = { Text("Деталі", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(
-                            painterResource(R.drawable.outline_arrow_back_24),
-                            contentDescription = "Назад"
-                        )
+                        Icon(painterResource(R.drawable.outline_arrow_back_24), contentDescription = "Назад")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -261,10 +355,7 @@ fun HomeDetailsContent(onBack: () -> Unit) {
         }
     ) { innerPadding ->
         Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
-                .padding(24.dp),
+            modifier = Modifier.padding(innerPadding).fillMaxSize().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -297,16 +388,6 @@ fun SettingsScreen(
         Button(
             onClick = { onUpdateText("Налаштування змінено!") },
             modifier = Modifier.width(120.dp).height(40.dp)
-        ) {
-            Text("Змінити")
-        }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun AppPreview() {
-    Lab1thingTheme {
-        Lab1thingApp()
+        ) { Text("Змінити") }
     }
 }

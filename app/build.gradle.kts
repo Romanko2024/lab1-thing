@@ -64,5 +64,7 @@ dependencies {
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.room3.runtime)
+    implementation("androidx.compose.material:material-icons-extended")
     ksp(libs.androidx.room3.compiler)
+
 }
