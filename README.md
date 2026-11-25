@@ -1,3 +1,707 @@
+Ти — досвідчений Android/Kotlin-архітектор. Проаналізуй мій проєкт Android Studio
+(пакет com.example.lab1_thing) і розкажи, як працює логіка, додана в ОСТАННІХ ДВОХ
+КОМІТАХ. Йдеться про інтеграцію Room 3 (SQLite ORM) та CRUD-операції.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 ЩО САМЕ АНАЛІЗУВАТИ:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Спочатку зроби `git diff HEAD~2 HEAD` (або переглянь останні 2 коміти в Git-панелі),
+щоб побачити всі зміни. Потім прочитай ці файли ПОВНІСТЮ:
+
+1. Gradle:
+   - gradle/libs.versions.toml (шукай room3, ksp)
+   - app/build.gradle.kts (плагіни, залежності, блок room3 {})
+
+2. Data Layer:
+   - app/src/main/java/com/example/lab1_thing/entity/ArtistEntity.kt
+   - app/src/main/java/com/example/lab1_thing/entity/TrackEntity.kt
+   - app/src/main/java/com/example/lab1_thing/entity/TrackWithArtist.kt
+   - app/src/main/java/com/example/lab1_thing/dao/AppDao.kt
+   - app/src/main/java/com/example/lab1_thing/db/AppDataBase.kt
+   - app/src/main/java/com/example/lab1_thing/util/Converters.kt
+
+3. Domain & Repository:
+   - app/src/main/java/com/example/lab1_thing/model/*.kt (Artist, Track, MyListable)
+   - app/src/main/java/com/example/lab1_thing/repository/AppRepository.kt
+   - app/src/main/java/com/example/lab1_thing/repository/AppRepositoryImpl.kt
+
+4. ViewModel:
+   - app/src/main/java/com/example/lab1_thing/HomeViewModel.kt
+
+5. Application & UI:
+   - app/src/main/java/com/example/lab1_thing/Lab1ThingApp.kt
+   - app/src/main/AndroidManifest.xml (тег <application>)
+   - app/src/main/java/com/example/lab1_thing/MainActivity.kt
+   - app/src/main/java/com/example/lab1_thing/ui/components/ArtistCard.kt
+   - app/src/main/java/com/example/lab1_thing/ui/components/TrackCard.kt
+   - app/src/main/java/com/example/lab1_thing/ui/components/ArtistDialog.kt
+   - app/src/main/java/com/example/lab1_thing/ui/components/TrackDialog.kt
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 ЩО МЕНІ ПОТРІБНО ОТРИМАТИ:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. АРХІТЕКТУРНА СХЕМА (ASCII або Mermaid)
+   Покажи шари: UI → ViewModel → Repository → DAO → Room DB.
+   Покажи, як пов'язані Entity (ArtistEntity, TrackEntity) з Domain-моделями
+   (Artist, Track) через mappers (toEntity/toDomain).
+   Покажи, де саме відбувається FK-зв'язок (TrackEntity.artistId → ArtistEntity.id).
+
+2. ЖИТТЄВИЙ ЦИКЛ ІНІЦІАЛІЗАЦІЇ БД (cold start)
+   Розпиши покроково від моменту запуску застосунку:
+   - Коли створюється Lab1ThingApp (Application)?
+   - Коли викликається AppDataBase.getDatabase() і створюється Room DB?
+   - Коли створюється AppRepositoryImpl?
+   - Як створюється HomeViewModel (через viewModelFactory)?
+   - Коли LaunchedEffect викликає loadAllDataFromDb()?
+
+3. СЦЕНАРІЇ CRUD (User Flows) — розпиши КОЖЕН покроково:
+   Для кожного сценарію вкажи:
+   - Тригер (що натиснув користувач)
+   - Ланцюжок викликів (стрілками: UI → VM → Repo → DAO → DB → і назад)
+   - Що відбувається в БД (який SQL-запит генерує Room)
+   - Як оновлюється UI (StateFlow emit → collectAsState → recomposition)
+
+   Сценарій A: Завантаження тестових даних у БД (кнопка "Завантажити тестові дані")
+   Сценарій B: Додавання нового артиста (кнопка "+ Додати артиста" → діалог → Зберегти)
+   Сценарій C: Додавання нового треку (кнопка "+ Додати трек" → вибір артиста → Зберегти)
+   Сценарій D: Редагування артиста (іконка олівця → зміна полів → Зберегти)
+   Сценарій E: Редагування треку
+   Сценарій F: Видалення артиста (іконка смітника). Зверни увагу на CASCADE!
+   Сценарій G: Видалення треку
+   Сценарій H: Очищення всієї БД (кнопка "Очистити БД")
+
+4. ROOM 3 ТА KSP (специфіка)
+   Поясни:
+   - Що генерує KSP на основі @Database, @Dao, @Entity?
+   - Як працює @ForeignKey з onDelete = CASCADE (що станеться з треками при видаленні артиста)?
+   - Як працює @Relation у TrackWithArtist (який SQL виконується)?
+   - Як працює @Transaction (чому він потрібен для getTracks())?
+   - Чому використовується AndroidSQLiteDriver?
+   - Де лежить згенерований код (app/build/generated/ksp/...) і що там можна побачити?
+
+5. MAPPING (Entity ↔ Domain)
+   Поясни, навіщо потрібні два набори класів (Entity для БД, Domain для UI).
+   Покажи на прикладі Track.toEntity() та TrackWithArtist.toDomain().
+   Поясни, чому Track має `artist: Artist?`, а TrackEntity — `artistId: Int?`.
+
+6. СТАН ТА РЕАКТИВНІСТЬ
+   Склади таблицю:
+   | Стан | Тип | Де живе (ViewModel / Compose) | Хто змінює | Хто читає |
+   |------|-----|-------------------------------|------------|-----------|
+   Зверни увагу: catalogItems — це StateFlow<List<MyListable>> у ViewModel.
+   Поясни, чому після кожної CRUD-операції викликається getAllDataFromDb() і
+   переприсвоюється catalogItems.value (це "ручна реактивність" — як у демо).
+
+7. ПОРІВНЯННЯ З ДЕМО (якщо є)
+   Якщо в проєкті є референс (Demo2026), вкажи, які саме патерни скопійовані:
+   - Application-рівневий Repository
+   - viewModelFactory { initializer { ... } }
+   - LiveData (у демо) vs StateFlow (у нас) — у чому різниця, чому обрали StateFlow
+   - @Embedded + @Relation (BookWithAuthor → TrackWithArtist)
+
+8. ЩО МОЖНА ПОКРАЩИТИ (критично, але конструктивно)
+   - Чи є зайві recomposition?
+   - Чи правильно обробляються помилки БД (try/catch)?
+   - Чи варто використовувати Flow<List<...>> з Room замість ручного getAllDataFromDb()?
+   - Чи потрібен DI (Hilt) замість Application-синглтона?
+   - Чи є проблеми з потоками (Dispatchers.IO)?
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📐 ФОРМАТ ВІДПОВІДІ:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Українською мовою
+- Markdown з заголовками (##) для кожного з 8 пунктів
+- Код цитуй БЛОКАМИ з номерами рядків (наприклад: `AppRepositoryImpl.kt:45–52`)
+- Ланцюжки викликів — стрілками: `onClick → viewModel.addArtist() → repo.addArtistsToDb() → dao.insertAllArtists() → SQLite INSERT`
+- Для сценаріїв — нумеровані списки крок за кроком
+- Не переписуй увесь код — лише релевантні фрагменти
+- Наприкінці — коротке резюме (5–7 речень): "якщо одним абзацом, то..."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ ВАЖЛИВО:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- НЕ вигадуй функції, яких немає у файлах — цитуй лише те, що реально є
+- Якщо чогось не вистачає (наприклад, файлу) — прямо скажи
+- Особлива увага — SQL-запитам, які генерує Room (наприклад, при CASCADE видаленні)
+- Звертай увагу на те, що ViewModel створюється через viewModelFactory, а не через viewModel()
+--------
+📖 Повний розбір інтеграції Room 3 та CRUD у проєкті lab1_thing
+1️⃣ АРХІТЕКТУРНА СХЕМА
+text
+┌─────────────────────────────────────────────────────────────────────┐
+│                        UI LAYER (Compose)                           │
+│  MainActivity → Lab1thingApp → HomeNavDisplay → HomeMainContent    │
+│                    ├─ ArtistCard      (Edit/Delete кнопки)          │
+│                    ├─ TrackCard       (Edit/Delete кнопки)          │
+│                    ├─ ArtistDialog    (форма)                       │
+│                    └─ TrackDialog     (форма)                       │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ StateFlow + колбеки
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                       VIEWMODEL LAYER                               │
+│  HomeViewModel                                                      │
+│  ├─ catalogItems: StateFlow<List<MyListable>>                       │
+│  ├─ CRUD-методи (suspend всередині viewModelScope)                  │
+│  └─ кожна операція → getAllDataFromDb() → оновлення StateFlow       │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ suspend-виклики
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      REPOSITORY LAYER                               │
+│  AppRepositoryImpl(appDao)                                          │
+│  ├─ мапить Domain ↔ Entity (toEntity / toDomain)                    │
+│  ├─ getAllDataFromDb() = getArtists() + getTracks()                 │
+│  └─ CRUD: addArtistsToDb, addTracksToDb, updateX, deleteX           │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ suspend DAO-виклики
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         DAO LAYER (KSP-generated)                   │
+│  AppDao (@Dao) → AppDao_Impl (генерується Room 3 під час Build)    │
+│  ├─ @Insert(onConflict = REPLACE)                                   │
+│  ├─ @Update / @Delete                                               │
+│  └─ @Query / @Transaction                                           │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ SQL-запити
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    ROOM 3 DATABASE (SQLite)                         │
+│  AppDataBase (singleton, "lab1_thing.db3")                          │
+│  ├─ artists       (ArtistEntity)                                    │
+│  └─ tracks        (TrackEntity) ──FK CASCADE──▶ artists             │
+└─────────────────────────────────────────────────────────────────────┘
+Два набори класів, пов'язані маперами:
+
+text
+       DOMAIN (для UI)                          ENTITY (для БД)
+   ┌───────────────────┐                     ┌────────────────────┐
+   │ Artist            │ ── .toEntity() ───▶ │ ArtistEntity       │
+   │  name, country,id │ ◀── .toDomain() ─── │  artist_name,...   │
+   └───────────────────┘                     └────────────────────┘
+   ┌───────────────────┐                     ┌────────────────────┐
+   │ Track             │ ── .toEntity() ───▶ │ TrackEntity        │
+   │  title, duration, │                     │  track_title, ...  │
+   │  artist: Artist?  │                     │  artistId: Int? ─┐ │
+   └───────────────────┘                     └──────────────────┼─┘
+                                                                │
+                          ┌─────────────────────────────────────┘
+                          ▼ FK CASCADE
+                    ┌────────────────────┐
+                    │ ArtistEntity.id    │
+                    └────────────────────┘
+2️⃣ ЖИТТЄВИЙ ЦИКЛ ІНІЦІАЛІЗАЦІЇ БД (cold start)
+Крок 1 — Android створює Application
+AndroidManifest.xml:
+
+xml
+<application android:name=".Lab1ThingApp" ... >
+text
+[1] Android OS запускає процес
+        ↓
+[2] Створюється Lab1ThingApp (підклас Application)
+        ↓
+[3] Ініціалізуються lazy-поля (але поки не обчислюються!):
+    private val appDataBase by lazy { AppDataBase.getDatabase(this) }
+    val appRepository by lazy { AppRepositoryImpl(appDao = appDataBase.appDao()) }
+        ↓
+[4] Application.onCreate() (не перевизначений — OK)
+Крок 2 — Activity і створення VM
+text
+[5] MainActivity.onCreate() → setContent { Lab1ThingApp(...) }
+        ↓
+[6] (application as Lab1ThingApp).appRepository
+        ↓
+    ┌──────────────────────────────────────────────────────────┐
+    │ Перший доступ до lazy `appRepository` → обчислення:       │
+    │                                                          │
+    │ appDataBase.appDao()                                     │
+    │   ↑                                                      │
+    │   └─ перший доступ до lazy `appDataBase` →               │
+    │      AppDataBase.getDatabase(context):                   │
+    │        - Room.databaseBuilder<AppDataBase>(...)          │
+    │          .setDriver(AndroidSQLiteDriver())               │
+    │          .build()                                        │
+    │        - Room генерує AppDataBase_Impl (KSP)             │
+    │        - Створює або відкриває файл lab1_thing.db3       │
+    │        - Виконує CREATE TABLE IF NOT EXISTS (якщо новий) │
+    │                                                          │
+    │ AppRepositoryImpl(appDao = appDataBase.appDao())         │
+    └──────────────────────────────────────────────────────────┘
+        ↓
+[7] Lab1thingApp(appRepository) отримує репозиторій
+        ↓
+[8] Всередині Lab1thingApp → viewModel(factory = viewModelFactory {
+        initializer { HomeViewModel(appRepository) }
+    })
+        ↓
+[9] Створюється HomeViewModel(appRepository):
+    - labelText    = MutableStateFlow("...")
+    - homeBackStack = MutableStateFlow([Main])
+    - catalogItems  = MutableStateFlow(emptyList())   ← ПОРОЖНІЙ!
+        ↓
+[10] HomeNavDisplay підписується:
+     val catalogItems by viewModel.catalogItems.collectAsState()  → emptyList()
+        ↓
+[11] LazyColumn отримує порожній список → рендерить 0 елементів
+        ↓
+[12] LaunchedEffect(Unit) { viewModel.loadAllDataFromDb() } — стартує
+        ↓
+[13] loadAllDataFromDb() у viewModelScope.launch:
+     catalogItems.value = appRepository.getAllDataFromDb()
+        ↓
+[14] getAllDataFromDb() у репозиторії (suspend, виконується на IO-потоці):
+     appDao.getArtists().map { it.toDomain() } +
+     appDao.getTracks().map { it.toDomain() }
+        ↓
+    ┌──────────────────────────────────────────────────────────┐
+    │ Якщо БД порожня (перший запуск) → обидва списки []:      │
+    │ catalogItems.value = [] → UI нічого не покаже             │
+    │                                                          │
+    │ Якщо БД вже має дані → заповниться ними                  │
+    └──────────────────────────────────────────────────────────┘
+        ↓
+[15] MutableStateFlow emitить нове значення → collectAsState → recomposition
+        ↓
+[16] LazyColumn рендерить елементи (якщо є)
+3️⃣ СЦЕНАРІЇ CRUD
+🅰️ Сценарій A: Завантажити тестові дані в БД
+Тригер: кнопка «Завантажити тестові дані в БД».
+
+text
+[1] Button.onClick → onLoadLocalData()  (MainActivity.kt, HomeMainContent)
+        ↓
+[2] onLoadLocalData = viewModel::loadAllLocalDataToDb
+        ↓
+[3] HomeViewModel.loadAllLocalDataToDb():
+    viewModelScope.launch {
+        appRepository.addArtistsToDb(appRepository.getLocalArtists())    ← (A)
+        appRepository.addTracksToDb(appRepository.getLocalTracks())      ← (B)
+        catalogItems.value = appRepository.getAllDataFromDb()             ← (C)
+    }
+        ↓
+    ┌──────────────────────────────────────────────────────────────┐
+    │ (A) addArtistsToDb(5 Artist):                                │
+    │     appDao.insertAllArtists(5 × ArtistEntity)                │
+    │     ─ SQL: INSERT OR REPLACE INTO artists                    │
+    │            (artist_name, country, artist_id)                 │
+    │            VALUES (?, ?, ?), (?, ?, ?), ...                  │
+    │     ─ Повертає List<Long> (rowId кожної вставки)             │
+    │                                                              │
+    │ (B) addTracksToDb(8 Track):                                  │
+    │     appDao.insertAllTracks(8 × TrackEntity)                  │
+    │     ─ SQL: INSERT OR REPLACE INTO tracks                     │
+    │            (track_title, durationSec, artist_id, track_id)   │
+    │            VALUES (?, ?, ?, ?), ...                          │
+    │     ─ artist_id встановлюється за Track.artist?.id            │
+    │     ─ Якщо Track.artist == null → artist_id = NULL           │
+    │                                                              │
+    │ (C) getAllDataFromDb():                                      │
+    │     ─ getArtists() → SELECT * FROM artists                   │
+    │     ─ getTracks()  → @Transaction                            │
+    │                      SELECT * FROM tracks                    │
+    │                      ORDER BY track_title                    │
+    │                      (Room автоматично виконує                │
+    │                       SELECT для кожного TrackWithArtist)    │
+    │     ─ Об'єднує: artists.map(toDomain) + tracks.map(toDomain) │
+    └──────────────────────────────────────────────────────────────┘
+        ↓
+[4] catalogItems.value = новий List<MyListable>  (5 Artist + 8 Track = 13)
+        ↓
+[5] StateFlow emitить → collectAsState → recomposition
+        ↓
+[6] LazyColumn рендерить 13 елементів
+💡 Зверніть увагу: HorizontalList при завантаженні з БД зникає — він не зберігається. У списку будуть лише Artist і Track. Це узгоджено з демо: після завантаження — лише справжні дані з БД.
+
+🅱️ Сценарій B: Додати артиста
+Тригер: «+ Додати артиста» → форма → «Зберегти».
+
+text
+[1] Button.onClick → showAddArtistDialog = true
+        ↓
+[2] Composable `if (showAddArtistDialog) ArtistDialog(...)` рендериться
+        ↓
+[3] Користувач вводить name, country → натискає "Зберегти"
+        ↓
+[4] ArtistDialog.confirmButton → onSave(name, country)
+        ↓
+[5] HomeMainContent: onAddArtist(name, country) → showAddArtistDialog = false
+        ↓
+[6] onAddArtist = viewModel::addArtist
+        ↓
+[7] HomeViewModel.addArtist(name, country):
+    viewModelScope.launch {
+        appRepository.addArtistsToDb(listOf(Artist(name, country, 0)))   ← id = 0
+        catalogItems.value = appRepository.getAllDataFromDb()
+    }
+        ↓
+    ┌──────────────────────────────────────────────────────────────┐
+    │ Artist(id = 0).toEntity() → ArtistEntity(id = 0)             │
+    │     ↑                                                        │
+    │     └─ id = 0 означає "autoGenerate" → Room згенерує          │
+    │        наступний вільний id (5, 6, ...)                      │
+    │                                                              │
+    │ SQL: INSERT OR REPLACE INTO artists                          │
+    │      (artist_name, country, artist_id)                       │
+    │      VALUES ('...', '...', 0)                                │
+    │      → повертає rowId = 6 (наприклад)                        │
+    └──────────────────────────────────────────────────────────────┘
+        ↓
+[8] getAllDataFromDb() → повертає оновлений список з новим артистом
+        ↓
+[9] catalogItems.value = ... → recomposition → картка з'явиться
+🅲 Сценарій C: Додати трек
+Тригер: «+ Додати трек» → форма → вибір артиста → «Зберегти».
+
+text
+[1] Button.onClick → showAddTrackDialog = true
+        ↓
+[2] TrackDialog(artists = items.filterIsInstance<Artist>(), ...)
+    ↑
+    └─ випадаючий список заповнюється з ПОТОЧНОГО списку артистів
+        ↓
+[3] Користувач вводить title, duration, обирає artist → "Зберегти"
+        ↓
+[4] TrackDialog.onSave(title, durationInt, selectedArtist)
+        ↓
+[5] onAddTrack(title, duration, artist) → showAddTrackDialog = false
+        ↓
+[6] viewModel.addTrack(title, durationSec, artist):
+    viewModelScope.launch {
+        appRepository.addTracksToDb(listOf(Track(title, durationSec, artist, 0)))
+        catalogItems.value = appRepository.getAllDataFromDb()
+    }
+        ↓
+    ┌──────────────────────────────────────────────────────────────┐
+    │ Track(title, duration, artist, id=0).toEntity():             │
+    │     TrackEntity(                                             │
+    │         title = title,                                       │
+    │         durationSec = duration,                              │
+    │         artistId = artist?.id,   ← зберігаємо FK!           │
+    │         id = 0                   ← autoGenerate             │
+    │     )                                                        │
+    │                                                              │
+    │ SQL: INSERT OR REPLACE INTO tracks                           │
+    │      (track_title, durationSec, artist_id, track_id)         │
+    │      VALUES (?, ?, ?, 0)                                     │
+    │      → artist_id = artist?.id (або NULL)                     │
+    │      → Room перевіряє FK: artist_id має існувати в artists   │
+    │        (інакше FOREIGN KEY constraint failed)                │
+    └──────────────────────────────────────────────────────────────┘
+        ↓
+[7] getAllDataFromDb → @Transaction getTracks() → для кожного треку
+    Room виконує SELECT * FROM artists WHERE artist_id = ?
+        ↓
+[8] TrackWithArtist.toDomain() → Track(artist = Artist(...))
+        ↓
+[9] catalogItems.value → recomposition
+🅳 Сценарій D: Редагувати артиста
+Тригер: іконка олівця на картці ArtistCard.
+
+text
+[1] ArtistCard(onEditClick = { artistToEdit = item })
+        ↓
+[2] Composable: artistToEdit?.let { ArtistDialog(initialArtist = it, ...) }
+    ↑
+    └─ діалог відкривається з ПОПЕРЕДНІМИ значеннями
+        ↓
+[3] Користувач змінює поля → "Зберегти"
+        ↓
+[4] onSave(name, country) → onEditArtist(artist.copy(name = name, country = country))
+    ↑
+    └─ зберігаємо id та інші поля, змінюємо лише name та country
+        ↓
+[5] artistToEdit = null   → діалог закривається
+        ↓
+[6] viewModel.updateArtist(modified):
+    viewModelScope.launch {
+        appRepository.updateArtistInDb(modified)
+        catalogItems.value = appRepository.getAllDataFromDb()
+    }
+        ↓
+    ┌──────────────────────────────────────────────────────────────┐
+    │ updateArtistInDb → appDao.updateArtist(entity)               │
+    │                                                              │
+    │ SQL: UPDATE artists                                          │
+    │      SET artist_name = ?, country = ?                        │
+    │      WHERE artist_id = ?                                     │
+    └──────────────────────────────────────────────────────────────┘
+        ↓
+[7] getAllDataFromDb → recomposition
+🅴 Сценарій E: Редагувати трек
+Аналогічно D, але для TrackDialog:
+
+Іконка олівця → trackToEdit = item
+
+track.copy(title, durationSec, artist) → viewModel.updateTrack()
+
+SQL: UPDATE tracks SET track_title = ?, durationSec = ?, artist_id = ? WHERE track_id = ?
+
+Якщо artist змінився — FK оновлюється (перевіряється, що новий artist_id існує)
+
+🅵 Сценарій F: Видалити артиста (⚠️ CASCADE!)
+Тригер: іконка смітника на ArtistCard.
+
+text
+[1] ArtistCard(onDeleteClick = { onDeleteArtist(item) })
+        ↓
+[2] viewModel.deleteArtist(artist):
+    viewModelScope.launch {
+        appRepository.deleteArtist(artist)
+        catalogItems.value = appRepository.getAllDataFromDb()
+    }
+        ↓
+    ┌──────────────────────────────────────────────────────────────┐
+    │ deleteArtist → appDao.delArtist(entity)                      │
+    │                                                              │
+    │ SQL (основний):                                              │
+    │   DELETE FROM artists WHERE artist_id = ?                    │
+    │                                                              │
+    │ SQL (CASCADE автоматично!):                                  │
+    │   DELETE FROM tracks WHERE artist_id = ?                     │
+    │   ↑                                                          │
+    │   └─ Room генерує цей DELETE автоматично завдяки             │
+    │      @ForeignKey(onDelete = CASCADE)                         │
+    │                                                              │
+    │ Порядок виконання:                                           │
+    │   1. SQLite починає транзакцію                               │
+    │   2. ON DELETE CASCADE → видаляє всі tracks з цим artist_id  │
+    │   3. Видаляє artists WHERE artist_id = ?                     │
+    │   4. COMMIT                                                  │
+    └──────────────────────────────────────────────────────────────┘
+        ↓
+[3] getAllDataFromDb → отримуємо СПИСОК БЕЗ артиста І БЕЗ його треків
+        ↓
+[4] catalogItems.value → recomposition
+    ┌──────────────────────────────────────────────────────────────┐
+    │ ⚠️ LazyColumn:                                                │
+    │   - ключ "X_ArtistName" → зник (onDispose)                   │
+    │   - ключі "Y_TrackTitle" (треки цього артиста) → зникли     │
+    │   - решта — перевикористовуються                             │
+    │                                                              │
+    │ Без CASCADE ці треки "зависли" б у БД як "сироти"            │
+    │ з неіснуючим FK → при наступному читанні Room              │
+    │ повернув би TrackWithArtist(artistEntity = null)             │
+    └──────────────────────────────────────────────────────────────┘
+🅶 Сценарій G: Видалити трек
+text
+[1] TrackCard(onDeleteClick = { onDeleteTrack(item) })
+        ↓
+[2] viewModel.deleteTrack(track):
+    appRepository.deleteTrack(track)
+    catalogItems.value = appRepository.getAllDataFromDb()
+        ↓
+[3] SQL: DELETE FROM tracks WHERE track_id = ?
+    (без CASCADE — бо tracks не має дочірніх таблиць)
+        ↓
+[4] Recomposition → картка зникає
+🅷 Сценарій H: Очистити всю БД
+Тригер: «Очистити БД».
+
+text
+[1] Button.onClick → onClearDb() → viewModel.clearDb()
+        ↓
+[2] HomeViewModel.clearDb():
+    viewModelScope.launch {
+        appRepository.clearAllData()
+        catalogItems.value = appRepository.getAllDataFromDb()
+    }
+        ↓
+[3] clearAllData():
+    appDao.delAllTracks()    → DELETE FROM tracks
+    appDao.delAllArtists()   → DELETE FROM artists
+    ↑
+    └─ ⚠️ САМЕ В ЦЬОМУ ПОРЯДКУ: спочатку tracks, потім artists
+       Інакше CASCADE спрацював би на artists, а потім
+       повторно на tracks — зайва робота (хоч і не помилка)
+        ↓
+[4] getAllDataFromDb() → обидва списки []
+        ↓
+[5] catalogItems.value = [] → LazyColumn рендерить 0 елементів
+4️⃣ ROOM 3 ТА KSP — специфіка
+🔸 Що генерує KSP
+Під час Build KSP-плагін аналізує анотації @Database, @Dao, @Entity і генерує Kotlin-код у:
+
+text
+app/build/generated/ksp/debug/kotlin/com/example/lab1_thing/
+    ├── dao/AppDao_Impl.kt          ← реалізація всіх @Insert/@Query
+    └── db/AppDataBase_Impl.kt      ← реалізація RoomDatabase
+AppDao_Impl.kt містить приблизно таке (спрощено):
+
+kotlin
+override suspend fun insertAllArtists(artistsEntity: List<ArtistEntity>): List<Long> {
+    return performSuspending(inTransaction = false) {
+        val stmt = SQLiteStatement("INSERT OR REPLACE INTO artists (artist_name, country, artist_id) VALUES (?, ?, ?)")
+        val result = ArrayList<Long>()
+        for (entity in artistsEntity) {
+            stmt.bindText(1, entity.name)
+            stmt.bindText(2, entity.country)
+            stmt.bindLong(3, entity.id.toLong())
+            result.add(stmt.executeInsert())
+        }
+        result
+    }
+}
+Це звичайний Kotlin-код — можна ставити breakpoints, дебажити, читати.
+
+🔸 @ForeignKey з CASCADE
+TrackEntity.kt:
+
+kotlin
+@ForeignKey(
+    entity = ArtistEntity::class,
+    parentColumns = arrayOf("artist_id"),
+    childColumns = arrayOf("artist_id"),
+    onDelete = ForeignKey.CASCADE,
+    onUpdate = ForeignKey.CASCADE
+)
+Що це дає на рівні SQL:
+
+При створенні таблиці (виконується один раз при першому запуску):
+
+sql
+CREATE TABLE IF NOT EXISTS tracks (
+    track_title TEXT NOT NULL,
+    durationSec INTEGER NOT NULL,
+    artist_id INTEGER,
+    track_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    FOREIGN KEY (artist_id) REFERENCES artists(artist_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+ON DELETE CASCADE каже SQLite:
+
+«Коли видаляється запис у artists, автоматично видали всі рядки в tracks, де artist_id збігається з видаленим artist_id».
+
+ON UPDATE CASCADE каже:
+
+«Коли змінюється artist_id у artists, автоматично онови artist_id у всіх tracks».
+
+На практиці: при DELETE FROM artists WHERE artist_id = 1 — SQLite сам виконає DELETE FROM tracks WHERE artist_id = 1. Ми не пишемо це вручну — це відбувається на рівні рушія.
+
+🔸 @Relation у TrackWithArtist
+kotlin
+data class TrackWithArtist(
+    @Embedded val trackEntity: TrackEntity,
+    @Relation(
+        parentColumns = ["artist_id"],
+        entityColumns = ["artist_id"]
+    )
+    val artistEntity: ArtistEntity?
+)
+Що генерує Room:
+
+Метод getTracks() має @Transaction — це критично. Room виконує два запити:
+
+sql
+-- Запит 1: основний
+SELECT * FROM tracks ORDER BY track_title;
+-- Повертає 8 рядків
+
+-- Запит 2: для кожного треку з artist_id != NULL
+SELECT * FROM artists WHERE artist_id IN (1, 2, 3, 4, 5);
+-- Повертає 5 рядків
+Потім Room склеює результати: для кожного TrackEntity знаходить відповідний ArtistEntity за artist_id і створює TrackWithArtist(trackEntity, artistEntity).
+
+Чому @Transaction:
+
+Між SELECT FROM tracks і SELECT FROM artists дані можуть змінитися (інший потік вставить нового артиста).
+
+@Transaction гарантує, що обидва SELECT бачать однаковий стан БД (isolated snapshot).
+
+Без @Transaction можна отримати неузгоджені дані: TrackWithArtist з artist_id = 100, але такого артиста ще немає (бо транзакція вставки не завершилась).
+
+🔸 AndroidSQLiteDriver
+kotlin
+Room.databaseBuilder<AppDataBase>(context, "lab1_thing.db3")
+    .setDriver(AndroidSQLiteDriver())
+    .build()
+AndroidSQLiteDriver — це драйвер SQLite з пакета androidx.sqlite:sqlite-bundled. У Room 3 він обов'язковий — це новий API (у Room 2 драйвер був вбудований).
+
+Що робить:
+
+Відкриває фізичний файл SQLite (/data/data/com.example.lab1_thing/databases/lab1_thing.db3).
+
+Керує з'єднанням (connection pool).
+
+Виконує SQL і повертає результати.
+
+🔸 Де подивитись згенерований код
+Build → Rebuild Project → чекати завершення
+
+Android Studio → Project view → "Project" (не "Android") → app/build/generated/ksp/debug/kotlin/...
+
+Або Ctrl+Shift+F → пошук "AppDao_Impl"
+
+5️⃣ MAPPING (Entity ↔ Domain)
+Навіщо два набори класів
+Аспект	Domain (Artist, Track)	Entity (ArtistEntity, TrackEntity)
+Призначення	Для UI та бізнес-логіки	Для зберігання в БД
+Поля	artist: Artist? (посилання)	artistId: Int? (FK)
+Анотації	Немає	@Entity, @PrimaryKey, @ForeignKey
+Залежність від Room	❌ Немає	✅ Залежить
+Серіалізація	Чистий Kotlin	Room розуміє, як зберегти
+Використання в LazyColumn	✅ Безпосередньо	❌ Потрібен mapper
+Приклад: Track.toEntity()
+kotlin
+fun Track.toEntity() = TrackEntity(
+    title = this.title,
+    durationSec = this.durationSec,
+    artistId = this.artist?.id,   ← РОЗГОРТАЄМО об'єкт у FK
+    id = this.id
+)
+Ключове: Track.artist — це об'єкт Artist?. У БД ми зберігаємо лише його id (artistId). Коли треба показати в UI — робимо зворотне перетворення через @Relation.
+
+Приклад: TrackWithArtist.toDomain()
+kotlin
+fun TrackWithArtist.toDomain() = Track(
+    title = this.trackEntity.title,
+    durationSec = this.trackEntity.durationSec,
+    artist = this.artistEntity?.toDomain(),   ← ЗБИРАЄМО назад
+    id = this.trackEntity.id
+)
+@Relation уже зробив «join» за нас: TrackWithArtist містить і trackEntity, і artistEntity. Залишається лише розпакувати у Track.
+
+Чому Track.artist: Artist?, а TrackEntity.artistId: Int?
+Artist? (Domain) — зручно для UI: track.artist?.name — і одразу ім'я.
+
+artistId: Int? (Entity) — єдине, що вміє зберігати реляційна БД. Об'єкти не серіалізуються.
+
+null з обох боків — бо трек може бути без артиста (як Track("...", 240, null, id=0)).
+
+6️⃣ СТАН ТА РЕАКТИВНІСТЬ
+Таблиця станів
+Стан	Тип	Де живе	Хто змінює	Хто читає
+labelText	StateFlow<String>	HomeViewModel	updateText()	HomeNavDisplay → HomeMainContent
+homeBackStack	StateFlow<List<HomeScreen>>	HomeViewModel	navigateTo/navigateBack	NavDisplay
+catalogItems	StateFlow<List<MyListable>>	HomeViewModel	CRUD-методи	LazyColumn
+showAddArtistDialog	Boolean (Compose)	HomeMainContent	клік кнопки	Composable
+artistToEdit	Artist? (Compose)	HomeMainContent	клік олівця	Composable
+appDataBase	AppDataBase (lazy)	Lab1ThingApp	ініціалізація	appRepository
+«Ручна реактивність» (як у демо)
+Ключовий патерн після кожної CRUD-операції:
+
+kotlin
+viewModelScope.launch {
+    appRepository.addArtistsToDb(...)                    // 1. змінюємо БД
+    catalogItems.value = appRepository.getAllDataFromDb() // 2. ПЕРЕЧИТУЄМО ВСЕ
+}
+Чому перечитуємо ВСЕ, а не оновлюємо локально:
+
+Джерело істини — БД. Локальне оновлення списку може розійтися з БД (наприклад, CASCADE видалив треки, а ми б оновили лише артистів).
+
+@Relation складний. Щоб дізнатися, як тепер виглядає TrackWithArtist після зміни FK, треба знову виконати join.
+
+Простота. Один getAllDataFromDb() — гарантовано консистентний стан.
+
+Чому не Room Flow
+Room вміє повертати Flow<List<TrackWithArtist>> — це реактивно, без ручного перечитування. Але:
+
+kotlin
+@Query("SELECT * FROM tracks")
+fun getTracksFlow(): Flow<List<TrackWithArtist>>  // ← автоматично emitить при зміні
+
+
 ======================================================lab3=========================
 Ти — досвідчений Android/Kotlin-архітектор. Проаналізуй мій проєкт Android Studio
 (пакет com.example.lab1_thing) і розпиши як працюють колонки списки що були додані в останньому коміті, тобто хто кого
